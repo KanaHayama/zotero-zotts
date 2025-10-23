@@ -39,8 +39,10 @@ ttsEngine-settingsFormatted = { $engine ->
         Rate: { $rate },
         Pitch: { $pitch }
     [azure]
-        Voice: { $voice },
+        Region: { $region },
         Language: { $language },
-        Region: { $region }
+        Voice: { $voice },
+        Volume: { $volume },
+        Rate: { $rate }
 }
 # TODO: ui - popups seem to not respect newlines, find a way to format this?

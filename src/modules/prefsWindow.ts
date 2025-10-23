@@ -122,7 +122,7 @@ function prefsRefreshHook(type: string, doc: Document) {
 }
 
 function handleEngineChange(doc: Document): void {
-    const radiogroup = doc.querySelector('radiogroup[preference*="ttsEngine.current"]') as any;
+    const radiogroup = doc.querySelector('radiogroup[preference*="ttsEngine.current"]') as unknown as XULRadioGroupElement;
     const selectedEngine = radiogroup?.value as string;
 
     if (selectedEngine) {
