@@ -234,8 +234,15 @@ function handleAzureLanguageChange(doc: Document): void {
 
 // Azure voice management functions
 async function updateAzureVoices(doc: Document): Promise<void> {
-    // If we already have cache, don't re-fetch
+    // If we already have cache, use it to populate UI
     if (azureVoicesCache) {
+        unlockAzureControls(doc);
+        populateAzureLanguages(doc, azureVoicesCache);
+        const currentLang = getPref("azure.language") as string;
+        if (currentLang) {
+            populateAzureVoices(doc, azureVoicesCache, currentLang);
+        }
+        updateTestVoiceButtons(doc);
         return;
     }
 
