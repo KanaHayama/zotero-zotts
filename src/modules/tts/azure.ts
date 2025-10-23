@@ -26,7 +26,7 @@ interface OggPage {
 class TextSectionSplitter {
     private static readonly MAX_SECTION_SIZE = 6 * 1024; // 6K characters, ~8 mins, ~$0.1. Azure Speech has TTS audio duration limit of 10 minutes.
 
-    private fullText: string = '';
+    private fullText: string = "";
     private currentIndex: number = 0;
 
     public initialize(text: string): void {
@@ -40,7 +40,7 @@ class TextSectionSplitter {
 
     public getNextSection(): string {
         if (!this.hasMore()) {
-            return '';
+            return "";
         }
 
         const sectionEnd = this.findSectionEnd(this.currentIndex);
@@ -51,7 +51,7 @@ class TextSectionSplitter {
     }
 
     public reset(): void {
-        this.fullText = '';
+        this.fullText = "";
         this.currentIndex = 0;
     }
 
@@ -548,10 +548,10 @@ class AudioPlayer {
             if (!this.audioElement.paused) {
                 this.audioElement.pause();
             }
-            if (this.audioElement.src.startsWith('blob:')) {
+            if (this.audioElement.src.startsWith("blob:")) {
                 URL.revokeObjectURL(this.audioElement.src);
             }
-            this.audioElement.removeAttribute('src');
+            this.audioElement.removeAttribute("src");
             this.audioElement.load();
         }
     }
@@ -636,7 +636,7 @@ class AudioPlayer {
         const segment = this.oggSegmenter.createSegment(chunksToPlay);
 
         // Create blob and URL for playback
-        const blob = new Blob([segment], { type: 'audio/ogg; codecs=opus' });
+        const blob = new Blob([segment], { type: "audio/ogg; codecs=opus" });
         const url = URL.createObjectURL(blob);
 
         if (this.audioElement) {
@@ -680,7 +680,7 @@ class AzureStreamingSynthesizer {
     private static readonly TURN_START_TIMEOUT = 5000;
 
     private ws: WebSocket | null = null;
-    private requestId: string = '';
+    private requestId: string = "";
     private audioPlayer: AudioPlayer;
     private textSplitter: TextSectionSplitter;
     private isConnected: boolean = false;
@@ -721,7 +721,7 @@ class AzureStreamingSynthesizer {
         return new Promise((resolve, reject) => {
             try {
                 this.ws = new window.WebSocket(wsUrl);
-                this.ws.binaryType = 'arraybuffer';
+                this.ws.binaryType = "arraybuffer";
 
                 this.ws.onopen = () => {
                     this.isConnected = true;
@@ -1152,7 +1152,7 @@ function getAzureConfig(): { key: string; region: string } {
 
     return {
         key: subscriptionKey.trim(),
-        region: region.trim()
+        region: region.trim().toLowerCase()
     };
 }
 
@@ -1289,14 +1289,21 @@ function filterVoicesByLanguage(voices: AzureVoice[], language: string): string[
 }
 
 export {
+    // Lifecycle
+    setDefaultPrefs,
+    initEngine,
+
+    // TTS Operations
     speak,
     stop,
     pause,
     resume,
+
+    // Connection & Resource Management
     resetConnection,
     dispose,
-    setDefaultPrefs,
-    initEngine,
+
+    // Configuration & Utilities
     getAzureConfig,
     getAllVoices,
     extractLanguages,
