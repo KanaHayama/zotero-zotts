@@ -213,6 +213,48 @@
         </menulist>
     </vbox>
 
+    <!-- Volume -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-azure-volume"
+                        for="azure-volume">
+            </html:label>
+            <html:input preference="__prefsPrefix__.azure.volume"
+                        readonly="true"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="azure-volume"
+                    min="0"
+                    max="100"
+                    value="100"
+                    preference="__prefsPrefix__.azure.volume"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Rate -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-azure-rate"
+                        for="azure-rate">
+            </html:label>
+            <html:input preference="__prefsPrefix__.azure.rate"
+                        readonly="true"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="azure-rate"
+                    min="25"
+                    max="400"
+                    value="100"
+                    preference="__prefsPrefix__.azure.rate"
+                    style="width:50%"
+        />
+    </vbox>
+
     <!-- Test Text Input -->
     <vbox>
         <html:label data-l10n-id="pref-azure-testText"

@@ -641,6 +641,8 @@ class AudioPlayer {
 
         if (this.audioElement) {
             this.audioElement.src = url;
+            this.audioElement.volume = (getPref("azure.volume") as number) / 100;
+            this.audioElement.playbackRate = (getPref("azure.rate") as number) / 100;
 
             const playPromise = this.audioElement.play();
 

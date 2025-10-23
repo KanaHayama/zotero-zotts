@@ -42,6 +42,8 @@ pref-azure-key = Subscription Key
 pref-azure-region = Region
 pref-azure-language = Language
 pref-azure-voice = Voice
+pref-azure-volume = Volume
+pref-azure-rate = Rate
 pref-azure-testText = Test sentence:
 pref-azure-testVoice = Test Voice
 
