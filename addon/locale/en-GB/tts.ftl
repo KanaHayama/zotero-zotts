@@ -23,10 +23,11 @@ ttsEngine-errorCause = { $engine ->
         [no-voices-found] No voices are installed
     }
     [azure] { $cause ->
-        *[other] Unknown Error
+        [config-incomplete] Language or voice not configured (select them in preferences)
+        [auth-failed] Authentication failed (check subscription key)
         [connection-failed] Failed to connect to Azure service
         [connection-closed] Connection to Azure service was unexpectedly closed
-        [auth-failed] Authentication failed (check subscription key)
+        *[other] Unknown Error
     }
 }
 
