@@ -22,6 +22,99 @@ interface OggPage {
     payload: Uint8Array;
 }
 
+// Text section splitter for handling long text synthesis
+class TextSectionSplitter {
+    private static readonly MAX_SECTION_SIZE = 6 * 1024; // 6K characters, ~8 mins, ~$0.1. Azure Speech has TTS audio duration limit of 10 minutes.
+
+    private fullText: string = '';
+    private currentIndex: number = 0;
+
+    public initialize(text: string): void {
+        this.fullText = text;
+        this.currentIndex = 0;
+    }
+
+    public hasMore(): boolean {
+        return this.currentIndex < this.fullText.length;
+    }
+
+    public getNextSection(): string {
+        if (!this.hasMore()) {
+            return '';
+        }
+
+        const sectionEnd = this.findSectionEnd(this.currentIndex);
+        const section = this.fullText.substring(this.currentIndex, sectionEnd);
+        this.currentIndex = sectionEnd;
+
+        return section;
+    }
+
+    public reset(): void {
+        this.fullText = '';
+        this.currentIndex = 0;
+    }
+
+    private findSectionEnd(startIndex: number): number {
+        const remaining = this.fullText.length - startIndex;
+        if (remaining <= TextSectionSplitter.MAX_SECTION_SIZE) {
+            return this.fullText.length;
+        }
+
+        // Search backwards from threshold position
+        const searchEnd = startIndex + TextSectionSplitter.MAX_SECTION_SIZE;
+        const searchText = this.fullText.substring(startIndex, searchEnd);
+        const minSearchPos = Math.floor(TextSectionSplitter.MAX_SECTION_SIZE * 0.5);
+
+        // Priority: paragraph boundary > line+indent > punctuation > single line > tab
+        // TODO: Tune break patterns
+        const breakPatterns = [
+            /\n\n/g,    // Paragraph separator
+            /\n\t/g,    // Line break + tab (likely paragraph start)
+            /\n /g,     // Line break + space (possible paragraph start)
+            /:\s/g,     // Colon + whitespace (break after colon)
+            /;\s/g,     // Semicolon + whitespace (break after semicolon)
+            /\n/g,      // Single line break
+            /\t/g,      // Tab character
+        ];
+
+        for (const pattern of breakPatterns) {
+            let lastMatch: RegExpExecArray | null = null;
+            let match: RegExpExecArray | null;
+
+            // Reset regex lastIndex
+            pattern.lastIndex = 0;
+
+            // Find all matches and keep the last one that's after minSearchPos
+            while ((match = pattern.exec(searchText)) !== null) {
+                if (match.index > minSearchPos) {
+                    lastMatch = match;
+                }
+            }
+
+            if (lastMatch) {
+                const sectionEnd = startIndex + lastMatch.index + lastMatch[0].length;
+
+                // Log split preview if there's more text after this section
+                if (sectionEnd < this.fullText.length) {
+                    const previewBefore = this.fullText.substring(Math.max(0, sectionEnd - 30), sectionEnd);
+                    const previewAfter = this.fullText.substring(sectionEnd, Math.min(this.fullText.length, sectionEnd + 30));
+                    ztoolkit.log(`Split at pattern "${lastMatch[0]}": ...${previewBefore} | ${previewAfter}...`);
+                }
+
+                return sectionEnd;
+            }
+        }
+
+        // No suitable break point found, force split at threshold
+        const previewBefore = this.fullText.substring(Math.max(0, searchEnd - 30), searchEnd);
+        const previewAfter = this.fullText.substring(searchEnd, Math.min(this.fullText.length, searchEnd + 30));
+        ztoolkit.log(`No suitable break point found, forcing split at ${TextSectionSplitter.MAX_SECTION_SIZE}: ...${previewBefore} | ${previewAfter}...`);
+
+        return searchEnd;
+    }
+}
+
 // Ogg/Opus stream segmenter for generating playable segments
 class OggSegmenter {
     private static readonly CRC_POLYNOMIAL = 0xEDB88320;
@@ -349,6 +442,7 @@ class AudioPlayer {
     private isInitialized: boolean = false;
     private isSynthesisComplete: boolean = false;
     private headersExtracted: boolean = false;
+    private onAllSegmentsComplete?: () => void;
 
     constructor() {
         this.oggSegmenter = new OggSegmenter();
@@ -365,6 +459,10 @@ class AudioPlayer {
         // For Ogg/Opus, we can use direct blob URLs instead of MediaSource
         // since Firefox natively supports Ogg/Opus
         this.isInitialized = true;
+    }
+
+    public setOnCompleteCallback(callback: () => void): void {
+        this.onAllSegmentsComplete = callback;
     }
 
     public async queueAudioChunk(audioData: Uint8Array): Promise<void> {
@@ -394,7 +492,7 @@ class AudioPlayer {
 
         // Headers already extracted, queue normally
         this.audioQueue.push(audioData);
-        ztoolkit.log(`Received audio chunk: ${audioData.length} bytes, queue size: ${this.audioQueue.reduce((sum, chunk) => sum + chunk.length, 0)} bytes`);
+        //ztoolkit.log(`Received audio chunk: ${audioData.length} bytes, queue size: ${this.audioQueue.reduce((sum, chunk) => sum + chunk.length, 0)} bytes`);
 
         await this.tryPlayNextSegment();
     }
@@ -423,37 +521,39 @@ class AudioPlayer {
     }
 
     public stop(): void {
-        this.audioQueue = [];
-        this.isPlaying = false;
+        this.resetAudioState();
         this.isPaused = false;
-        this.isSynthesisComplete = false;
-        this.headersExtracted = false;
-        this.oggSegmenter.reset();
-
-        if (this.audioElement) {
-            // Pause if playing
-            if (!this.audioElement.paused) {
-                this.audioElement.pause();
-            }
-
-            // Always clear src to prevent "Invalid URI" errors
-            if (this.audioElement.src) {
-                // Revoke blob URL if it's a blob
-                if (this.audioElement.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(this.audioElement.src);
-                }
-                this.audioElement.removeAttribute('src');
-                this.audioElement.load(); // Reset the element
-            }
-        }
-
         addon.data.tts.state = "idle";
+    }
+
+    public prepareForNewSection(): void {
+        // Reset audio state for new section synthesis without changing global state
+        this.resetAudioState();
     }
 
     public dispose(): void {
         this.stop();
         this.audioElement = null;
         this.isInitialized = false;
+    }
+
+    private resetAudioState(): void {
+        this.audioQueue = [];
+        this.isPlaying = false;
+        this.isSynthesisComplete = false;
+        this.headersExtracted = false;
+        this.oggSegmenter.reset();
+
+        if (this.audioElement && this.audioElement.src) {
+            if (!this.audioElement.paused) {
+                this.audioElement.pause();
+            }
+            if (this.audioElement.src.startsWith('blob:')) {
+                URL.revokeObjectURL(this.audioElement.src);
+            }
+            this.audioElement.removeAttribute('src');
+            this.audioElement.load();
+        }
     }
 
     private async tryPlayNextSegment(): Promise<void> {
@@ -561,8 +661,12 @@ class AudioPlayer {
                 if (this.audioQueue.length > 0 || !this.isSynthesisComplete) {
                     await this.tryPlayNextSegment();
                 } else {
-                    // All done
-                    addon.data.tts.state = "idle";
+                    // All audio segments done
+                    if (this.onAllSegmentsComplete) {
+                        this.onAllSegmentsComplete();
+                    } else {
+                        addon.data.tts.state = "idle";
+                    }
                 }
             };
         }
@@ -571,9 +675,12 @@ class AudioPlayer {
 
 // WebSocket v2 connection manager for Azure Speech
 class AzureStreamingSynthesizer {
+    private static readonly TURN_START_TIMEOUT = 5000;
+
     private ws: WebSocket | null = null;
     private requestId: string = '';
     private audioPlayer: AudioPlayer;
+    private textSplitter: TextSectionSplitter;
     private isConnected: boolean = false;
     private isStopped: boolean = false;
     private turnStartResolve: (() => void) | null = null;
@@ -581,6 +688,8 @@ class AzureStreamingSynthesizer {
 
     constructor() {
         this.audioPlayer = new AudioPlayer();
+        this.textSplitter = new TextSectionSplitter();
+        this.audioPlayer.setOnCompleteCallback(() => this.onAudioComplete());
     }
 
     public async connect(): Promise<void> {
@@ -650,12 +759,36 @@ class AzureStreamingSynthesizer {
     }
 
     public async speak(text: string): Promise<void> {
-        this.isStopped = false;
-
         // Stop any previous playback
         if (this.audioPlayer) {
             this.audioPlayer.stop();
         }
+
+        // Initialize text section splitting
+        this.textSplitter.initialize(text);
+        this.isStopped = false;
+
+        // Get first section
+        const firstSection = this.textSplitter.getNextSection();
+        ztoolkit.log(`Azure speak: total ${text.length} chars, first section ${firstSection.length} chars, hasMore: ${this.textSplitter.hasMore()}`);
+
+        // Synthesize first section
+        await this.speakSection(firstSection);
+
+        // Check if stopped during synthesis
+        if (this.isStopped) {
+            return;
+        }
+    }
+
+    private async speakSection(sectionText: string): Promise<void> {
+        // Early return if stopped
+        if (this.isStopped) {
+            return;
+        }
+
+        // Prepare audio player for new section synthesis
+        this.audioPlayer.prepareForNewSection();
 
         // Validate language and voice configuration
         const languageId = (getPref("azure.language") as string || "").trim();
@@ -666,15 +799,20 @@ class AzureStreamingSynthesizer {
             throw new Error("config-incomplete");
         }
 
-        // Generate new requestId for each speak request
+        // Generate new requestId for each section
         this.requestId = this.generateGuid();
 
         await this.connect();
+
+        // Check if stopped after connection
+        if (this.isStopped) {
+            return;
+        }
+
         await this.audioPlayer.initialize();
 
-        // Send speech.config with empty object
+        // Send speech.config
         const configMessage = this.buildMessage('speech.config', {});
-
         this.ws?.send(configMessage);
 
         // Send synthesis.context
@@ -702,7 +840,7 @@ class AzureStreamingSynthesizer {
             }
         });
 
-        // Reset turn.start state and create Promise to wait for it
+        // Wait for turn.start response
         const turnStartPromise = new Promise<void>((resolve, reject) => {
             this.turnStartResolve = resolve;
             this.turnStartReject = reject;
@@ -710,12 +848,11 @@ class AzureStreamingSynthesizer {
 
         this.ws?.send(contextMessage);
 
-        // Wait for turn.start response with timeout
         try {
             await Promise.race([
                 turnStartPromise,
                 new Promise<void>((_, reject) =>
-                    setTimeout(() => reject(new Error("Timeout waiting for turn.start")), 5000)
+                    setTimeout(() => reject(new Error("Timeout waiting for turn.start")), AzureStreamingSynthesizer.TURN_START_TIMEOUT)
                 )
             ]);
 
@@ -729,18 +866,23 @@ class AzureStreamingSynthesizer {
             throw error;
         }
 
-        // Send all text at once
-        ztoolkit.log(`Sending full text: ${text.length} characters`);
+        // Check if stopped after waiting for turn.start
+        if (this.isStopped) {
+            return;
+        }
+
+        // Send section text
+        ztoolkit.log(`Sending section text: ${sectionText.length} characters`);
         addon.data.tts.state = "playing";
 
-        const textMessage = this.buildMessage('text.piece', text, 'text/plain');
+        const textMessage = this.buildMessage('text.piece', sectionText, 'text/plain');
         this.ws?.send(textMessage);
 
         // Immediately send text.end to signal completion
         const endMessage = this.buildMessage('text.end', '', 'text/plain');
         this.ws?.send(endMessage);
 
-        ztoolkit.log(`Text sent, waiting for audio synthesis to complete`)
+        ztoolkit.log(`Section text sent, waiting for audio synthesis to complete`);
     }
 
     public stop(): void {
@@ -753,6 +895,7 @@ class AzureStreamingSynthesizer {
             this.turnStartResolve = null;
         }
 
+        this.textSplitter.reset();
         this.audioPlayer.stop();
         addon.data.tts.state = "idle";
     }
@@ -777,6 +920,34 @@ class AzureStreamingSynthesizer {
         this.stop();
         this.disconnect();
         this.audioPlayer.dispose();
+    }
+
+    private async onAudioComplete(): Promise<void> {
+        // Early return if stopped
+        if (this.isStopped) {
+            this.textSplitter.reset();
+            addon.data.tts.state = "idle";
+            return;
+        }
+
+        // Check if there are more text sections to synthesize
+        if (this.textSplitter.hasMore()) {
+            const nextSection = this.textSplitter.getNextSection();
+            ztoolkit.log(`Continuing with next section: ${nextSection.length} chars, hasMore: ${this.textSplitter.hasMore()}`);
+
+            try {
+                await this.speakSection(nextSection);
+            } catch (error) {
+                ztoolkit.log(`Error synthesizing section: ${error}`);
+                this.textSplitter.reset();
+                addon.data.tts.state = "idle";
+            }
+        } else {
+            // All text sections completed
+            ztoolkit.log('All text sections completed');
+            this.textSplitter.reset();
+            addon.data.tts.state = "idle";
+        }
     }
 
     private generateGuid(): string {
@@ -878,7 +1049,7 @@ class AzureStreamingSynthesizer {
             const audioData = view.slice(2 + headerLength);
 
             if (audioData.length > 0) {
-                ztoolkit.log(`Received audio chunk: ${audioData.length} bytes`);
+                //ztoolkit.log(`Received audio chunk: ${audioData.length} bytes`);
                 try {
                     await this.audioPlayer.queueAudioChunk(audioData);
                 } catch (error) {
