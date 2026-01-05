@@ -431,9 +431,7 @@ class OggSegmenter {
 
 // Audio player class for handling Ogg/Opus playback
 class AudioPlayer {
-    private static readonly MIN_SEGMENT_SIZE = 8 * 1024; // 8KB minimum buffer size
-
-    private oggSegmenter: OggSegmenter;
+    private readonly oggSegmenter: OggSegmenter;
 
     private audioElement: HTMLAudioElement | null = null;
     private audioQueue: Uint8Array[] = [];
@@ -444,8 +442,18 @@ class AudioPlayer {
     private headersExtracted: boolean = false;
     private onAllSegmentsComplete?: () => void;
 
+    private _minSegmentSize: number = 8 * 1024;
+
     constructor() {
         this.oggSegmenter = new OggSegmenter();
+    }
+
+    public get minSegmentSize(): number {
+        return this._minSegmentSize;
+    }
+
+    public set minSegmentSize(size: number) {
+        this._minSegmentSize = size;
     }
 
     public async initialize(): Promise<void> {
@@ -565,7 +573,7 @@ class AudioPlayer {
         const queuedSize = this.audioQueue.reduce((sum, chunk) => sum + chunk.length, 0);
 
         // Calculate remaining size after taking one segment
-        const remainingSize = queuedSize - AudioPlayer.MIN_SEGMENT_SIZE;
+        const remainingSize = queuedSize - this.minSegmentSize;
 
         // Determine if we should play
         let shouldPlay = false;
@@ -573,11 +581,11 @@ class AudioPlayer {
         if (this.isSynthesisComplete) {
             // Synthesis is complete
             if (queuedSize > 0) {
-                if (queuedSize < AudioPlayer.MIN_SEGMENT_SIZE) {
+                if (queuedSize < this.minSegmentSize) {
                     // Edge case: less than minimum, log warning and play all
-                    ztoolkit.log(`Warning: Final segment is only ${queuedSize} bytes (< ${AudioPlayer.MIN_SEGMENT_SIZE}), playing anyway`);
+                    ztoolkit.log(`Warning: Final segment is only ${queuedSize} bytes (< ${this.minSegmentSize}), playing anyway`);
                     shouldPlay = true;
-                } else if (remainingSize < AudioPlayer.MIN_SEGMENT_SIZE) {
+                } else if (remainingSize < this.minSegmentSize) {
                     // Edge case: between 1x-2x threshold, play all together
                     ztoolkit.log(`Final segment is ${queuedSize} bytes, playing all together`);
                     shouldPlay = true;
@@ -588,7 +596,7 @@ class AudioPlayer {
             }
         } else {
             // Synthesis not complete, only play if we have enough buffer
-            if (queuedSize >= AudioPlayer.MIN_SEGMENT_SIZE && remainingSize >= AudioPlayer.MIN_SEGMENT_SIZE) {
+            if (queuedSize >= this.minSegmentSize && remainingSize >= this.minSegmentSize) {
                 shouldPlay = true;
             }
         }
@@ -608,20 +616,20 @@ class AudioPlayer {
 
         // Calculate queue sizes for decision making
         const queuedSize = this.audioQueue.reduce((sum, chunk) => sum + chunk.length, 0);
-        const remainingSize = queuedSize - AudioPlayer.MIN_SEGMENT_SIZE;
+        const remainingSize = queuedSize - this.minSegmentSize;
 
         // Determine which chunks to play
-        const chunksToPlay: Uint8Array[] = (this.isSynthesisComplete || remainingSize < AudioPlayer.MIN_SEGMENT_SIZE)
+        const chunksToPlay: Uint8Array[] = (this.isSynthesisComplete || remainingSize < this.minSegmentSize)
             ? // Play all remaining chunks if synthesis is complete or remaining would be too small
               (this.audioQueue.splice(0, this.audioQueue.length))
-            : // Play chunks until we have at least MIN_SEGMENT_SIZE
+            : // Play chunks until we have at least minSegmentSize
               (() => {
                   let segmentSize = 0;
                   let chunkCount = 0;
                   for (const chunk of this.audioQueue) {
                       segmentSize += chunk.length;
                       chunkCount++;
-                      if (segmentSize >= AudioPlayer.MIN_SEGMENT_SIZE) {
+                      if (segmentSize >= this.minSegmentSize) {
                           break;
                       }
                   }
@@ -792,9 +800,11 @@ class AzureStreamingSynthesizer {
         // Prepare audio player for new section synthesis
         this.audioPlayer.prepareForNewSection();
 
-        // Validate language and voice configuration
+        // Read configuration from preferences
         const languageId = (getPref("azure.language") as string || "").trim();
         const voiceName = (getPref("azure.voice") as string || "").trim();
+        const minSegmentSizeKB = getPref("azure.minSegmentSize") as number || 8;
+        this.audioPlayer.minSegmentSize = minSegmentSizeKB * 1024;
 
         if (!languageId || !voiceName) {
             ztoolkit.log(`Azure TTS configuration incomplete: language="${languageId}", voice="${voiceName}"`);

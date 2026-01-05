@@ -44,6 +44,7 @@ pref-azure-language = Language
 pref-azure-voice = Voice
 pref-azure-volume = Volume
 pref-azure-rate = Rate
+pref-azure-minSegmentSize = Playback Preload Amount
 pref-azure-testText = Test sentence:
 pref-azure-testVoice = Test Voice
 

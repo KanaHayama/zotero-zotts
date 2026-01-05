@@ -21,6 +21,7 @@ declare namespace _ZoteroTypes {
       "azure.voice": string;
       "azure.volume": number;
       "azure.rate": number;
+      "azure.minSegmentSize": number;
       "shortcuts.speak": string;
       "shortcuts.pause": string;
       "shortcuts.cancel": string;

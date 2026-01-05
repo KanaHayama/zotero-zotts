@@ -12,6 +12,7 @@ pref("__prefsPrefix__.azure.language", "en-US");
 pref("__prefsPrefix__.azure.voice", "");
 pref("__prefsPrefix__.azure.volume", 100);
 pref("__prefsPrefix__.azure.rate", 100);
+pref("__prefsPrefix__.azure.minSegmentSize", 8);
 pref("__prefsPrefix__.shortcuts.speak", "S");
 pref("__prefsPrefix__.shortcuts.pause", "P");
 pref("__prefsPrefix__.shortcuts.cancel", "C");

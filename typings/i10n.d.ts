@@ -28,6 +28,7 @@ export type FluentMessageId =
   | 'popup-loadingTrailer'
   | 'pref-azure-key'
   | 'pref-azure-language'
+  | 'pref-azure-minSegmentSize'
   | 'pref-azure-rate'
   | 'pref-azure-region'
   | 'pref-azure-testText'

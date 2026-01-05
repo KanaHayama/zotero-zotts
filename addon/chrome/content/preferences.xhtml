@@ -259,6 +259,20 @@
         />
     </vbox>
 
+    <!-- Min Segment Size -->
+    <vbox>
+        <html:label data-l10n-id="pref-azure-minSegmentSize"></html:label>
+        <radiogroup id="azure-minSegmentSize"
+                    orient="horizontal"
+                    style="padding-left:20px;"
+                    oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('azure-minSegmentSize-change', window.document)">
+            <radio label="8KB" value="8"/>
+            <radio label="16KB" value="16"/>
+            <radio label="32KB" value="32"/>
+            <radio label="64KB" value="64"/>
+        </radiogroup>
+    </vbox>
+
     <!-- Test Text Input -->
     <vbox>
         <html:label data-l10n-id="pref-azure-testText"

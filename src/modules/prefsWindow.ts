@@ -78,6 +78,13 @@ function prefsLoadHook(type: string, doc: Document) {
     (doc.getElementById(`${config.addonRef}-advanced-subs-input`) as
         // @ts-ignore
         HTMLParagraphElement).value = getPref("subs.customSubs")
+    
+    // set minSegmentSize radiogroup value from pref (number -> string for UI)
+    const minSegmentSizeRadio = doc.getElementById("azure-minSegmentSize") as unknown as XULRadioGroupElement;
+    if (minSegmentSizeRadio) {
+        const value = getPref("azure.minSegmentSize") as number || 8;
+        minSegmentSizeRadio.value = String(value);
+    }
 
     // set default test text for Azure
     const azureTestText = doc.getElementById("azure-testText") as HTMLInputElement;
@@ -108,6 +115,8 @@ function prefsRefreshHook(type: string, doc: Document) {
         handleAzureLanguageChange(doc)
     } else if (type === "azure-voice-change") {
         updateTestVoiceButtons(doc)
+    } else if (type === "azure-minSegmentSize-change") {
+        handleAzureMinSegmentSizeChange(doc)
     } else if (type === "subs-text") {
         setSubsTextareaWarning(doc)
     } else if (type === "subs-cite-overall") {
@@ -388,6 +397,16 @@ function unlockAzureControls(doc: Document): void {
 
     // Update Test Voice button state based on current values
     updateTestVoiceButtons(doc);
+}
+
+function handleAzureMinSegmentSizeChange(doc: Document): void {
+    const radioGroup = doc.getElementById("azure-minSegmentSize") as unknown as XULRadioGroupElement;
+    if (radioGroup?.value) {
+        const numValue = parseInt(radioGroup.value, 10);
+        if (!isNaN(numValue)) {
+            setPref("azure.minSegmentSize", numValue);
+        }
+    }
 }
 
 function setSubsTextareaWarning (doc: Document){
